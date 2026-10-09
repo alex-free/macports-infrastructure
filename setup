@@ -1,0 +1,115 @@
+#!/bin/bash
+
+if [[ $EUID -eq 0 ]] || ! command -v sudo &> /dev/null; then
+    echo "Error: Cannot run as root or with sudo privilages. Make sure sudo is installed but do not execute with sudo, you will be prompted later. Execute as normal user."
+    exit 1
+fi
+
+# Sudo no timeout
+echo "Defaults timestamp_timeout=-1" | sudo tee /etc/sudoers.d/no-timeout
+
+# Its in the repo this script is in.
+# Resolve the absolute path to the mprsyncup script NOW before any cd.
+mprsyncup_path="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/jobs/mprsyncup-tigerports"
+
+# Delete cron.
+LOG_FILE="$HOME/mprsyncup.log"
+rm -f $LOG_FILE
+sudo rm -f /etc/cron.d/tigerports
+sudo rm -f /var/tmp/mprsyncup.lock
+
+# Install base deps to mimick mac os system.
+sudo apt install --yes git mtree-netbsd zlib1g-dev curl libcurl4-openssl-dev
+
+# Move to homedir.
+cd "$(eval echo ~${USER})"
+
+# Generate priv key.
+# Tar it for easy backup to local.
+
+if [ ! -f "tigerports-privkey.pem" ]; then
+	# The macports-base/doc/pubkey.in file says this.
+	#openssl genrsa -des3 -out tigerports-privkey.pem 2048
+	# No -des3 to avoid entering passphrase.
+	#openssl genrsa -out tigerports-privkey.pem 2048
+	openssl rsa -in tigerports-privkey.pem -pubout -out tigerports-pubkey.pem
+	sudo chown ${USER}:${USER} tigerports-privkey.pem
+	sudo chown ${USER}:${USER} tigerports-pubkey.pem
+	chmod 600 tigerports-privkey.pem
+	chmod 600 tigerports-pubkey.pem
+	echo "Copy .pem files into macports-base and push before running setup again."
+	exit 0
+fi
+
+sudo tee /etc/rsyncd.conf > /dev/null << 'EOF'
+# Global Linux Daemon Settings
+uid = nobody
+gid = nogroup
+use chroot = yes
+max connections = 10
+pid file = /var/run/rsyncd.pid
+
+&include /var/tmp/macports/release/base/portmgr/rsync.repos-tigerports
+EOF
+
+# My VPS needs to change the websrv root.
+sudo tee /etc/nginx/sites-enabled/default > /dev/null << 'EOF'
+server {
+        listen 80 default_server;
+        listen [::]:80 default_server;
+
+        root /var/www/html;
+        autoindex on;
+
+        index index.php index.html;
+
+        server_name _;
+	
+	location ~ \.php$ {
+        	include snippets/fastcgi-php.conf;
+        	fastcgi_pass 127.0.0.1:9000;
+        }
+}
+EOF
+
+# Restart
+sudo nginx -t
+
+# 2. Reload the service instantly without dropping active network traffic
+sudo systemctl reload nginx
+
+# Clean dirs since this is initial setup.
+#sudo rm -rf /var/www/html/macports
+
+# Create rsync folders.
+sudo mkdir -p /var/www/html/macports/release/base
+sudo mkdir -p /var/www/html/macports/release/ports
+sudo mkdir -p /var/www/html/macports/trunk/base
+
+# Create http folders.
+sudo mkdir -p /var/www/html/macports/distfiles
+sudo mkdir -p /var/www/html/macports/packages
+
+# Make writable by current user for scp upload
+sudo chown -R ${USER}:www-data /var/www/html
+sudo find /var/www/html/macports/ -type d -exec chmod 755 {} +
+sudo find /var/www/html/macports/ -type f -exec chmod 644 {} +
+
+# Clean everything.
+
+# Delete paths
+sudo rm -rf /var/tmp/macports
+mkdir -p /var/tmp/macports/release/ports
+
+# Add Mac OS admin group before running mprsyncup
+sudo groupadd admin > /dev/null 2>&1
+
+# Initial mpryncup invokation.
+"$mprsyncup_path"
+
+# This runs every 15 minutes.
+echo "*/15 * * * * $USER flock -n /var/tmp/mprsyncup.lock '$mprsyncup_path' >> '$LOG_FILE' 2>&1" | sudo tee /etc/cron.d/tigerports > /dev/null
+
+# Enable rsync on startup and start serving now.
+sudo systemctl enable rsync
+sudo systemctl restart rsync

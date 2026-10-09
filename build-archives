@@ -1,0 +1,63 @@
+#!/bin/bash
+
+set -e
+export PATH=/opt/local/bin:/opt/local/sbin:$PATH
+port -d -N selfupdate
+port -d -N upgrade outdated
+# Twice for apple-gcc-42 for bootstrap.
+sudo port deactivate apple-gcc42
+# Yt-dlp depends on ffmpeg:
+sudo port -d -N uninstall --follow-dependents yt-dlp
+port -d -N install \
+    apple-gcc42 \
+    apple-gcc42 \
+    gcc16 \
+    git \
+    libsdl2 \
+    openssh \
+    openssl \
+    openvpn2 \
+    curl \
+    libsdl \
+    python314 \
+    ffmpeg \
+    aria2 \
+    vim \
+    bash \
+    xorg \
+    nano \
+    wget \
+    cmark \
+    gmake \
+    cmake \
+    legacy-support \
+    mplayer-devel \
+    cdrdao \
+    cdrtools
+
+set +e
+# Optimized builds:
+if [ "$(machine)" == "ppc970" ]; then
+    sudo port deactivate ffmpeg
+    sudo port -d -N install ffmpeg +G4
+    sudo port deactivate ffmpeg
+    sudo port -d -N install ffmpeg +G5
+
+    sudo port deactivate mplayer
+    sudo port -d -N install mplayer
+
+    sudo port deactivate mplayer
+    sudo port -d -N install mplayer +G4
+
+    sudo port deactivate mplayer
+    sudo port -d -N install mplayer +G5
+
+    sudo port deactivate mplayer-devel
+    sudo port -d -N install mplayer-devel +G4
+
+    sudo port deactivate mplayer-devel
+    sudo port -d -N install mplayer-devel +G5
+fi
+
+# Depends on FFmpeg:
+sudo port -d -N install yt-dlp

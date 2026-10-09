@@ -1,0 +1,289 @@
+#!/bin/sh
+####
+# Script to checkout/update base sources from both master and the current
+# release tag (as determined by the base/config/RELEASE_URL file) and a ports
+# tree from master, and then export and sync all of them to the
+# ${RSYNCROOT} location, wherefrom the rsync modules are fed to the `sync'
+# and `selfupdate' routines in port(1). Read the base/portmgr/rsync.repos
+# file for more information on both the necessary rsync modules and filesystem
+# level paths, which this script bootstraps.
+#
+# Whatever server uses this script to mirror the MacPorts rsync repositories
+# should simply adapt the ${RSYNCROOT} path variable as necessary (keeping it
+# in sync with the equally named variable in base/portmgr/rsync.repos) and
+# install it on cron/launchd with a suitable periodicity, previously discussed
+# with the portmgr@ team (macports-mgr@lists.macosforge.org). Repositories
+# themselves are detailed & served by base/portmgr/rsync.repos, as stated above
+# (that is, no manual intervention what-so-ever is needed, other than installing
+# this script and adding the repositories detailed in base/portmgr/rsync.repos
+# to a local rsyncd.conf file).
+#
+# Lastly, it is required of every 3rd party mirrors to keep track of this script
+# and the base/portmgr/rsync.repos file and always maintain local copies in as
+# close sync as possible.
+#
+#
+# Created by fkr@opendarwin.org, jberry@macports.org and yeled@macports.org,
+# Updated by jmpp@macports.org
+####
+
+set -e
+set -x
+
+# Paths we'll work on:
+ROOT=/var/tmp/macports
+PREFIX=${ROOT}/opt/local
+GITROOT=/var/tmp/macports
+TBASE=${GITROOT}/trunk/base
+RBASE=${GITROOT}/release/base
+PORTS=${GITROOT}/release/ports
+CONTRIB=${GITROOT}/release/contrib
+#RSYNCROOT=/rsync/macports
+RSYNCROOT=/var/www/html/macports
+MPTOOLSPREFIX=/opt/local
+MPBIN=${MPTOOLSPREFIX}/bin
+
+# Commands we need. For options to be substituted correctly, these must
+# not be substituted within double quotes. Thus, there must not be any
+# globbing characters, and the command itself must not contain spaces.
+#GIT="${MPBIN}/git"
+GIT="git"
+#RSYNC="${MPBIN}/rsync -q"
+RSYNC="/usr/bin/rsync -q"
+RM="/bin/rm"
+MKDIR="/bin/mkdir"
+#MV="${MPBIN}/gmv"
+MV="mv"
+LN="/bin/ln"
+TAR="/bin/tar"
+OPENSSL="/usr/bin/openssl"
+AWK="/usr/bin/awk"
+#STAT="${MPBIN}/gstat"
+STAT="stat"
+#GZIP="${MPBIN}/gzip"
+GZIP="gzip"
+BASENAME="/usr/bin/basename"
+TCLSH="${PREFIX}/bin/port-tclsh"
+PORTINDEX="${PREFIX}/bin/portindex"
+PORTINDEX2JSON="${CONTRIB}/portindex2json/portindex2json.tcl"
+
+PATH=${PREFIX}/bin:/bin:/usr/bin:/usr/sbin:${MPBIN}
+
+# Platforms we generate indexes for. This is intentionally split on
+# whitespace later.
+#PLATFORMS="9_powerpc 9_i386 10_i386 11_i386 12_i386 13_i386 14_i386 15_i386 16_i386 17_i386 18_i386 19_i386 20_i386 20_arm 21_i386 21_arm 22_i386 22_arm 23_i386 23_arm 24_i386 24_arm 25_i386 25_arm"
+PLATFORMS="8_powerpc 8_i386 9_powerpc 9_i386"
+
+# Sources information:
+BASEURL=https://github.com/alex-free/macports-base.git
+PORTSURL=https://github.com/alex-free/tigerports-ports.git
+CONTRIBURL=https://github.com/macports/macports-contrib.git
+RELEASE_URL_FILE=config/RELEASE_URL
+
+# private key to use for signing
+# XXX set real path
+PRIVKEY="${HOME}/tigerports-privkey.pem"
+
+#
+# Functions
+#
+
+hardlink() {
+    SOURCE="$1"
+    TARGET="$2"
+    [ -f "${SOURCE}" ] && [ -f "${TARGET}" ] && [ "$(${STAT} -c %i "${SOURCE}")" = "$(${STAT} -c %i "${TARGET}")" ] && return
+    printf "Hard linking %s to %s\n" "${SOURCE}" "${TARGET}"
+    TMPTARGET="${ROOT}"/"${TARGET##*/}".$$
+    ${LN} "${SOURCE}" "${TMPTARGET}"
+    ${MV} "${TMPTARGET}" "${TARGET}"
+}
+
+sign() {
+    [ -z "${PRIVKEY}" ] && return
+    for FILE in "$@"; do
+        printf "Signing %s\n" "${FILE}"
+        ${OPENSSL} dgst -ripemd160 -sign "${PRIVKEY}" -out "${FILE}.rmd160" "${FILE}"
+    done
+}
+
+#
+# Update trunk/base
+#
+
+if [ -d "${TBASE}/.git" ]; then
+#    ${GIT} -C "${TBASE}" pull -q
+#    ${GIT} -C "${TBASE}" fetch --tags
+    ${GIT} -C "${TBASE}" fetch origin tigerports-release-2.12 --tags
+    ${GIT} -C "${TBASE}" checkout tigerports-release-2.12
+    ${GIT} -C "${TBASE}" pull -q origin tigerports-release-2.12
+else
+#    ${GIT} clone -q "${BASEURL}" "${TBASE}"
+    ${GIT} clone -q -b tigerports-release-2.12 "${BASEURL}" "${TBASE}"
+fi
+
+${MKDIR} -p "${RSYNCROOT}/trunk/base"
+${RSYNC} -aIC --delete "${TBASE}/" "${RSYNCROOT}/trunk/base"
+
+#
+# Update release/base
+#
+
+read -r RELEASE_URL < "${TBASE}/${RELEASE_URL_FILE}"
+if [ -z "${RELEASE_URL}" ]; then
+    echo "no RELEASE_URL specified in git master, bailing out!"
+    exit 1
+fi
+hardlink "${RSYNCROOT}/trunk/base/${RELEASE_URL_FILE}" "${RSYNCROOT}/distfiles/MacPorts/$(${BASENAME} ${RELEASE_URL_FILE})"
+
+RBASE_CHANGED=1
+if [ -d "${RBASE}/.git" ]; then
+    cd "${RBASE}"
+    ${GIT} fetch --tags
+    RBASE_OLD_REV="$(${GIT} rev-parse HEAD)"
+    ${GIT} checkout -q "$(${BASENAME} ${RELEASE_URL})"
+    RBASE_NEW_REV="$(${GIT} rev-parse HEAD)"
+    [ "${RBASE_OLD_REV}" = "${RBASE_NEW_REV}" ] && RBASE_CHANGED=0
+else
+    ${GIT} clone -q "${TBASE}" "${RBASE}"
+    ${GIT} -C "${RBASE}" checkout -q "$(${BASENAME} ${RELEASE_URL})"
+fi
+
+${MKDIR} -p "${RSYNCROOT}/release/base"
+${RSYNC} -aIC --delete "${RBASE}/" "${RSYNCROOT}/release/base"
+
+#
+# Update release/ports
+#
+
+PORTS_CHANGED=1
+if [ -d "${PORTS}/.git" ]; then
+    cd "${PORTS}"
+    PORTS_OLD_REV="$(${GIT} rev-parse HEAD)"
+    ${GIT} pull -q
+    PORTS_NEW_REV="$(${GIT} rev-parse HEAD)"
+    [ "${PORTS_OLD_REV}" = "${PORTS_NEW_REV}" ] && PORTS_CHANGED=0
+else
+    cd "${PORTS}"
+    ${GIT} clone -q --depth 1 "${PORTSURL}" "${PORTS}"
+    PORTS_NEW_REV="$(${GIT} rev-parse HEAD)"
+fi
+
+#
+# Update release/contrib
+#
+
+if [ -d "${CONTRIB}"/.git ]; then
+    cd "${CONTRIB}"
+    ${GIT} pull -q
+else
+    ${GIT} clone -q "${CONTRIBURL}" "${CONTRIB}"
+fi
+
+if [ "${RBASE_CHANGED}" -eq 1 ]; then
+    PORTS_CHANGED=1
+    (
+        # build MP in a private location for indexing
+        cd "${RBASE}"
+        ./configure \
+            --prefix="${PREFIX}" \
+            --with-install-group="$(id -gn)" \
+            --with-install-user="$(id -un)"
+        make clean
+        JOBS=1
+        if [ "$(uname -s)" = "Darwin" ]; then
+            JOBS="$(sysctl -n hw.activecpu)"
+        fi
+        make -j"$JOBS"
+        make install
+        make distclean
+    )
+fi
+
+if [ "${PORTS_CHANGED}" -eq 1 ]; then
+    (
+        # generate platform-specific indexes
+        cd "${PORTS}"
+        # Intentionally split PLATFORMS on whitespace.
+        for PLATFORM in $PLATFORMS; do
+            INDEX="PortIndex_darwin_${PLATFORM}"
+            ${PORTINDEX} -p "macosx_${PLATFORM}" -o "${INDEX}" \
+                | ${AWK} '{ print "Updating " idx ":\t" $0 }' idx="$INDEX" \
+                | expand -t 40,48,56,64,72,80
+        done
+
+        # generate json for each platform-specific index
+        for PLATFORM in $PLATFORMS; do
+            INDEX="PortIndex_darwin_${PLATFORM}"
+            ${TCLSH} "${PORTINDEX2JSON}" "${INDEX}"/PortIndex --info commit="${PORTS_NEW_REV}" > "${INDEX}"/PortIndex.json
+        done
+    )
+fi
+
+${MKDIR} -p "${RSYNCROOT}/release/ports"
+${RSYNC} -aIC --delete "${PORTS}/" "${RSYNCROOT}/release/ports"
+
+#
+# Update trunk/dports
+#
+
+cd "${RSYNCROOT}"
+if [ ! -L trunk/dports ]; then
+    cd trunk
+    ${RM} -rf dports && ${LN} -s ../release/ports dports
+fi
+
+#
+# Update release/tarballs
+#
+
+# Generate and sign tarballs of base and ports and the PortIndex files.
+if [ "${RBASE_CHANGED}" -eq 1 ]; then
+    ${TAR} -C "${RSYNCROOT}"/release/ -cf "${ROOT}"/base.tar base
+    sign "${ROOT}"/base.tar
+fi
+if [ "${PORTS_CHANGED}" -eq 1 ]; then
+    ${TAR} --exclude 'PortIndex*/PortIndex.json' -C "${RSYNCROOT}"/release/ -czf "${ROOT}"/ports.tar.gz ports
+
+    ${TAR} --exclude 'PortIndex*' -C "${RSYNCROOT}"/release/ -cf "${ROOT}"/ports.tar ports
+    for INDEX_DIR in "${RSYNCROOT}"/release/ports/PortIndex_*; do
+        INDEX_LINK_DIR="${ROOT}"/"${INDEX_DIR##*/}"
+        ${MKDIR} -p "${INDEX_LINK_DIR}"
+        hardlink "${INDEX_DIR}"/PortIndex "${INDEX_LINK_DIR}"/PortIndex
+    done
+    sign "${ROOT}"/ports.tar "${ROOT}"/PortIndex_*/PortIndex
+    if [ -x "${GZIP}" ]; then
+        ${GZIP} --best --keep --rsyncable --suffix .gz-rsync "${ROOT}"/ports.tar
+        sign "${ROOT}"/ports.tar.gz-rsync
+    fi
+fi
+
+# Tarballs used to be a symlink to the real directory tarballs_current.
+# Clean up this situation if found. This should only happen once.
+[ -L "${RSYNCROOT}"/release/tarballs ] && ${RM} -f "${RSYNCROOT}"/release/tarballs
+[ -d "${RSYNCROOT}"/release/tarballs_current ] && ${MV} "${RSYNCROOT}"/release/tarballs_current "${RSYNCROOT}"/release/tarballs
+
+# Replace files on rsync server as quickly as possible.
+# This is not atomic but doing it atomically is difficult.
+${MKDIR} -p "${RSYNCROOT}"/release/tarballs "${RSYNCROOT}"/distfiles
+if [ "${RBASE_CHANGED}" -eq 1 ]; then
+    ${MV} "${ROOT}"/base.tar* "${RSYNCROOT}"/release/tarballs
+fi
+if [ "${PORTS_CHANGED}" -eq 1 ]; then
+    ${MV} "${ROOT}"/ports.tar.gz "${RSYNCROOT}"/release
+    hardlink "${RSYNCROOT}"/release/ports.tar.gz "${RSYNCROOT}"/distfiles/ports.tar.gz
+    if [ -f "${ROOT}"/ports.tar.gz-rsync ]; then
+        ${MV} "${ROOT}"/ports.tar.gz-rsync "${ROOT}"/ports.tar.gz
+        ${MV} "${ROOT}"/ports.tar.gz-rsync.rmd160 "${ROOT}"/ports.tar.gz.rmd160
+    fi
+    ${MV} "${ROOT}"/ports.tar* "${RSYNCROOT}"/release/tarballs
+    for INDEX_DIR in "${RSYNCROOT}"/release/ports/PortIndex_*; do
+        INDEX_LINK_DIR="${RSYNCROOT}/release/tarballs/${INDEX_DIR##*/}"
+        ${MKDIR} -p "${INDEX_LINK_DIR}"
+        hardlink "${INDEX_DIR}"/PortIndex "${INDEX_LINK_DIR}"/PortIndex
+        hardlink "${INDEX_DIR}"/PortIndex.quick "${INDEX_LINK_DIR}"/PortIndex.quick
+        hardlink "${ROOT}"/"${INDEX_DIR##*/}"/PortIndex.rmd160 "${INDEX_LINK_DIR}"/PortIndex.rmd160
+    done
+    ${RM} -rf "${ROOT}"/PortIndex_*
+fi
+
+printf "Done\n"
