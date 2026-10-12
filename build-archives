@@ -20,9 +20,10 @@ port -d -N install \
     curl \
     libsdl \
     python314 \
-    ffmpeg \
+    python27 \
     aria2 \
     vim \
+    nano \
     bash \
     xorg \
     nano \
@@ -31,33 +32,52 @@ port -d -N install \
     gmake \
     cmake \
     legacy-support \
-    mplayer-devel \
     cdrdao \
-    cdrtools
+    cdrtools \
+    minivmac-128k \
+    minivmac-512k \
+    minivmac-512ke \
+    minivmac-plus \
+    minivmac-se \
+    minivmac-sefdhd \
+    minivmac-classic \
+    minivmac-ii \
+    minivmac-custom \
+    minivmac \
+    coreutils
 
-set +e
 # Optimized builds:
 if [ "$(machine)" == "ppc970" ]; then
+    sudo port deactivate ffmpeg
+    sudo port -d -N install ffmpeg
+
     sudo port deactivate ffmpeg
     sudo port -d -N install ffmpeg +G4
     sudo port deactivate ffmpeg
     sudo port -d -N install ffmpeg +G5
 
     sudo port deactivate mplayer
+    # Conflicts with regular mplayer.
+    sudo port deactivate mplayer-devel
     sudo port -d -N install mplayer
-
     sudo port deactivate mplayer
     sudo port -d -N install mplayer +G4
-
     sudo port deactivate mplayer
     sudo port -d -N install mplayer +G5
-
+    
+    sudo port deactivate mplayer
+    sudo port -d -N install mplayer-devel
     sudo port deactivate mplayer-devel
     sudo port -d -N install mplayer-devel +G4
-
     sudo port deactivate mplayer-devel
     sudo port -d -N install mplayer-devel +G5
+else
+    sudo port -d -N install \
+        ffmpeg \
+        mplayer
+    sudo port deactivate mplayer
+    sudo port -d -N install mplayer-devel
 fi
 
-# Depends on FFmpeg:
+# Depends on FFmpeg, just do it last
 sudo port -d -N install yt-dlp
