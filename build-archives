@@ -42,9 +42,12 @@ port -d -N install \
     minivmac-sefdhd \
     minivmac-classic \
     minivmac-ii \
-    minivmac-custom \
     minivmac \
-    coreutils
+    coreutils \
+    clang-3.4 \
+    autoconf \
+    automake \
+    m4
 
 # Optimized builds:
 if [ "$(machine)" == "ppc970" ]; then
@@ -72,9 +75,11 @@ if [ "$(machine)" == "ppc970" ]; then
     sudo port deactivate mplayer-devel
     sudo port -d -N install mplayer-devel +G5
 else
+    sudo port deactivate mplayer-devel
     sudo port -d -N install \
         ffmpeg \
         mplayer
+
     sudo port deactivate mplayer
     sudo port -d -N install mplayer-devel
 fi
