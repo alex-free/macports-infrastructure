@@ -7,82 +7,64 @@ port -d -N upgrade outdated
 # Twice for apple-gcc-42 for bootstrap.
 sudo port deactivate apple-gcc42
 # Yt-dlp depends on ffmpeg:
-sudo port -d -N uninstall --follow-dependents yt-dlp
+sudo port -d -N uninstall --follow-dependents yt-dlp > /dev/null 2>&1
 port -d -N install \
-    apple-gcc42 \
-    apple-gcc42 \
-    gcc16 \
-    git \
-    libsdl2 \
-    openssh \
-    openssl \
-    openvpn2 \
-    curl \
-    libsdl \
-    python314 \
-    python27 \
-    aria2 \
-    vim \
-    nano \
-    bash \
-    xorg \
-    nano \
-    wget \
-    cmark \
-    gmake \
-    cmake \
-    legacy-support \
-    cdrdao \
-    cdrtools \
-    minivmac-128k \
-    minivmac-512k \
-    minivmac-512ke \
-    minivmac-plus \
-    minivmac-se \
-    minivmac-sefdhd \
-    minivmac-classic \
-    minivmac-ii \
-    minivmac \
-    coreutils \
-    clang-3.4 \
-    autoconf \
-    automake \
-    m4
+    rdepof:apple-gcc42 apple-gcc42 \
+    rdepof:apple-gcc42 apple-gcc42 \
+    rdepof:gcc16 gcc16\
+    rdepof:git git\
+    rdepof:libsdl2 libsdl2 \
+    rdepof:openssh openssh \
+    rdepof:openvpn2 openvpn2 \
+    rdepof:libsdl libsdl \
+    rdepof:python314 python314 \
+    rdepof:python27 python27 \
+    rdepof:aria2 aria2 \
+    rdepof:vim vim \
+    rdepof:nano nano \
+    rdepof:bash bash \
+    rdepof:xorg xorg \
+    rdepof:wget wget \
+    rdepof:cmark cmark \
+    rdepof:gmake gmake \
+    rdepof:cmake cmake \
+    rdepof:legacy-support legacy-support \
+    rdepof:cdrdao cdrdao \
+    rdepof:cdrtools cdrtools \
+    rdepof:minivmac-128k minivmac-128k \
+    rdepof:minivmac-512k minivmac-512k \
+    rdepof:minivmac-512ke minivmac-512ke \
+    rdepof:minivmac-plus minivmac-plus \
+    rdepof:minivmac-se minivmac-se \
+    rdepof:minivmac-sefdhd minivmac-sefdhd \
+    rdepof:minivmac-classic minivmac-classic \
+    rdepof:minivmac-ii minivmac-ii \
+    rdepof:minivmac minivmac \
+    rdepof:coreutils coreutils \
+    rdepof:clang-3.4 clang-3.4 \
+    rdepof:ffmpeg ffmpeg \
+    rdepof:mplayer mplayer
+
+sudo port deactivate mplayer
+sudo port -d -N install rdepof:mplayer-devel
+sudo port deactivate mplayer-devel
 
 # Optimized builds:
 if [ "$(machine)" == "ppc970" ]; then
-    sudo port deactivate ffmpeg
-    sudo port -d -N install ffmpeg
-
-    sudo port deactivate ffmpeg
+    sudo port deactivate ffmpeg 
     sudo port -d -N install ffmpeg +G4
     sudo port deactivate ffmpeg
     sudo port -d -N install ffmpeg +G5
 
-    sudo port deactivate mplayer
-    # Conflicts with regular mplayer.
-    sudo port deactivate mplayer-devel
-    sudo port -d -N install mplayer
-    sudo port deactivate mplayer
     sudo port -d -N install mplayer +G4
     sudo port deactivate mplayer
     sudo port -d -N install mplayer +G5
     
     sudo port deactivate mplayer
-    sudo port -d -N install mplayer-devel
-    sudo port deactivate mplayer-devel
     sudo port -d -N install mplayer-devel +G4
     sudo port deactivate mplayer-devel
     sudo port -d -N install mplayer-devel +G5
-else
-    sudo port deactivate mplayer-devel
-    sudo port -d -N install \
-        ffmpeg \
-        mplayer
-
-    sudo port deactivate mplayer
-    sudo port -d -N install mplayer-devel
 fi
 
 # Depends on FFmpeg, just do it last
-sudo port -d -N install yt-dlp
+sudo port -d -N install rdepof:yt-dlp yt-dlp
