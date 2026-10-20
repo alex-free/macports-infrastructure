@@ -18,6 +18,7 @@ port -d -N install \
     rdepof:openvpn2 openvpn2 \
     rdepof:libsdl libsdl \
     rdepof:python314 python314 \
+    rdepof:py-iniconfig \
     rdepof:python27 python27 \
     rdepof:aria2 aria2 \
     rdepof:vim vim \
