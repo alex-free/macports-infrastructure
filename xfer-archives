@@ -1,23 +1,19 @@
 #!/bin/bash
 
 archives_sec=~/Desktop/tigerports-keys/tigerports-archives-2027.sec
+rsync_pass=~/Desktop/tigerports-keys/tigerports-account-vps.txt
 
 if [[ ! -e "$archives_sec" ]]; then
     echo "Error: can't find signing key: $archives_sec"
     exit 1
 fi
 
-# When this script exits, automatically delete the temp directory.
-cleanup() 
-{ 
-    if [[ -e $tmp ]]; then
-        echo "Clearing temp files..."  
-        rm -rf $tmp   
-    fi
-}
-trap cleanup EXIT
+if [[ ! -e "$rsync_pass" ]]; then
+    echo "Error: can't find rsync pass: $rsync_pass"
+    exit 1
+fi
 
-tmp=$(mktemp -d /var/tmp/"$(basename "$0")".XXX)
+chmod 600 "$rsync_pass"
 
 if command -v signify >/dev/null 2>&1; then
     echo "Got signify at $(which signify)"
@@ -25,13 +21,40 @@ else
     sudo port -d -N install signify
 fi
 
-cp -rv /opt/local/var/macports/software/* $tmp
+mkdir -p ~/tigerports.com/archives
+mkdir -p ~/tigerports.com/distfiles
+cp -rv /opt/local/var/macports/software/* ~/tigerports.com/archives/ 
+cp -rv /opt/local/var/macports/distfiles/* ~/tigerports.com/distfiles/
 
-cd $tmp
+cd ~/tigerports.com/archives 
 
 find . -name "*.tbz2" | while read -r pkg_path; do
     echo "Signing: $pkg_path"
     signify -S -s "$archives_sec" -m "$pkg_path"
 done 
 
-scp -r $tmp/* tigerports@tigerports.com:/var/www/html/tmp/
+# Upload archives to tigerports.com
+rsync -av \
+  --password-file="$rsync_pass" \
+  ~/tigerports.com/archives/ \
+  alex@tigerports.com::archives-upload/
+
+# Download archives not on local machine to tigerports.com
+rsync -av \
+  --ignore-existing \
+  --password-file="$rsync_pass" \
+  alex@tigerports.com::archives-upload/ \
+  ~/tigerports.com/archives/
+
+# Upload distfiles to tigerports.com
+rsync -av \
+  --password-file="$rsync_pass" \
+  ~/tigerports.com/distfiles/ \
+  alex@tigerports.com::distfiles-upload/
+
+# Download distfiles not on local machine to tigerports.com
+rsync -av \
+  --ignore-existing \
+  --password-file="$rsync_pass" \
+  alex@tigerports.com::distfiles-upload/ \
+  ~/tigerports.com/distfiles/

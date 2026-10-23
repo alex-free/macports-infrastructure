@@ -19,7 +19,7 @@ sudo rm -f /etc/cron.d/tigerports
 sudo rm -f /var/tmp/mprsyncup.lock
 
 # Install base deps to mimick mac os system.
-sudo apt install --yes git mtree-netbsd zlib1g-dev curl libcurl4-openssl-dev
+sudo apt install --yes git build-essential mtree-netbsd zlib1g-dev curl libcurl4-openssl-dev
 
 # Move to homedir.
 cd "$(eval echo ~${USER})"
@@ -49,8 +49,31 @@ use chroot = yes
 max connections = 10
 pid file = /var/run/rsyncd.pid
 
+[distfiles-upload]
+    path = /var/www/html/macports/distfiles
+    comment = Distfiles rsync
+    read only = no
+    list = no
+    auth users = alex
+    secrets file = /etc/rsyncd.secrets
+
+[archives-upload]
+    path = /var/www/html/macports/packages
+    comment = Binary Archives
+    read only = no
+    list = no
+    auth users = alex
+    secrets file = /etc/rsyncd.secrets
+
 &include /var/tmp/macports/release/base/portmgr/rsync.repos-tigerports
 EOF
+
+if [[ ! -e /etc/rsyncd.secrets ]]; then
+    echo "Error: you need an /etc/rsynd.secrets"
+    exit 1
+fi
+
+sudo chmod 600 /etc/rsyncd.secrets
 
 # My VPS needs to change the websrv root.
 sudo tee /etc/nginx/sites-enabled/default > /dev/null << 'EOF'
@@ -80,6 +103,9 @@ sudo systemctl reload nginx
 
 # Clean dirs since this is initial setup.
 #sudo rm -rf /var/www/html/macports
+
+# Create base distfile folder
+mkdir /var/www/html/macports/distfiles/MacPorts
 
 # Create rsync folders.
 sudo mkdir -p /var/www/html/macports/release/base
