@@ -7,7 +7,9 @@ port -d -N upgrade outdated
 # Twice for apple-gcc-42 for bootstrap.
 sudo port deactivate apple-gcc42
 # Yt-dlp depends on ffmpeg:
-sudo port -d -N uninstall --follow-dependents yt-dlp > /dev/null 2>&1
+set +e
+sudo port -d -N uninstall --follow-dependents yt-dlp
+set -e
 port -d -N install \
     rdepof:apple-gcc42 apple-gcc42 \
     rdepof:apple-gcc42 apple-gcc42 \
@@ -17,9 +19,6 @@ port -d -N install \
     rdepof:openssh openssh \
     rdepof:openvpn2 openvpn2 \
     rdepof:libsdl libsdl \
-    rdepof:python314 python314 \
-    rdepof:py-iniconfig \
-    rdepof:python27 python27 \
     rdepof:aria2 aria2 \
     rdepof:vim vim \
     rdepof:nano nano \
@@ -46,10 +45,13 @@ port -d -N install \
     rdepof:ffmpeg ffmpeg \
     rdepof:mplayer mplayer
 
+set +e
 sudo port deactivate mplayer
-sudo port -d -N install rdepof:mplayer-devel
+set -e
+sudo port -d -N install rdepof:mplayer-devel mplayer-devel
+set +e
 sudo port deactivate mplayer-devel
-
+set -e
 # Optimized builds:
 if [ "$(machine)" == "ppc970" ]; then
     sudo port deactivate ffmpeg 
