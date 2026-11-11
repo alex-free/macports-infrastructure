@@ -1,18 +1,29 @@
 #!/bin/bash
 
+tiger=false
+if [[ "$(uname -r | cut -d. -f1)" = "8" ]]; then
+   tiger=true
+fi
+
 set -e
 export PATH=/opt/local/bin:/opt/local/sbin:$PATH
 port -d -N selfupdate
 port -d -N upgrade outdated
-# Twice for apple-gcc-42 for bootstrap.
-sudo port deactivate apple-gcc42
+
 # Yt-dlp depends on ffmpeg:
 set +e
 sudo port -d -N uninstall --follow-dependents yt-dlp
 set -e
-port -d -N install \
-    rdepof:apple-gcc42 apple-gcc42 \
-    rdepof:apple-gcc42 apple-gcc42 \
+
+if [[ "$tiger" == "true" ]]; then
+    sudo port deactivate apple-gcc42
+    sudo port -d -N install \
+        rdepof:apple-gcc42 apple-gcc42 \
+        apple-gcc42
+fi
+
+# Twice for apple-gcc-42 for bootstrap.
+sudo port -d -N install \
     rdepof:gcc16 gcc16\
     rdepof:git git\
     rdepof:libsdl2 libsdl2 \
