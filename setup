@@ -19,7 +19,7 @@ sudo rm -f /etc/cron.d/tigerports
 sudo rm -f /var/tmp/mprsyncup.lock
 
 # Install base deps to mimick mac os system.
-sudo apt install --yes git build-essential mtree-netbsd zlib1g-dev curl libcurl4-openssl-dev
+sudo apt install --yes git build-essential mtree-netbsd zlib1g-dev curl libcurl4-openssl-dev libnginx-mod-http-fancyindex
 
 # Move to homedir.
 cd "$(eval echo ~${USER})"
@@ -82,7 +82,10 @@ server {
         listen [::]:80 default_server;
 
         root /var/www/html;
-        autoindex on;
+        fancyindex on;
+        fancyindex_exact_size off;
+        fancyindex_name_length 255;
+        fancyindex_directories_first on;
 
         index index.php index.html;
 
