@@ -22,6 +22,10 @@ if [[ "$tiger" == "true" ]]; then
         apple-gcc42
 fi
 
+set +e
+sudo port deactivate mplayer-devel
+set -e
+
 # Twice for apple-gcc-42 for bootstrap.
 sudo port -d -N install \
     rdepof:gcc16 gcc16\

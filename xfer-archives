@@ -34,26 +34,26 @@ find . -name "*.tbz2" | while read -r pkg_path; do
 done 
 
 # Upload archives to tigerports.com
-rsync -av \
+/usr/bin/rsync -av \
   --password-file="$rsync_pass" \
   ~/tigerports.com/archives/ \
   alex@tigerports.com::archives-upload/
 
 # Download archives not on local machine to tigerports.com
-rsync -av \
+/usr/bin/rsync -av \
   --ignore-existing \
   --password-file="$rsync_pass" \
   alex@tigerports.com::archives-upload/ \
   ~/tigerports.com/archives/
 
 # Upload distfiles to tigerports.com
-rsync -av \
+/usr/bin/rsync -av \
   --password-file="$rsync_pass" \
   ~/tigerports.com/distfiles/ \
   alex@tigerports.com::distfiles-upload/
 
 # Download distfiles not on local machine to tigerports.com
-rsync -av \
+/usr/bin/rsync -av \
   --ignore-existing \
   --password-file="$rsync_pass" \
   alex@tigerports.com::distfiles-upload/ \
