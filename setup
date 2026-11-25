@@ -43,8 +43,8 @@ fi
 
 sudo tee /etc/rsyncd.conf > /dev/null << 'EOF'
 # Global Linux Daemon Settings
-uid = nobody
-gid = nogroup
+uid = $USER 
+gid = $(id -gn)
 use chroot = yes
 max connections = 10
 pid file = /var/run/rsyncd.pid
