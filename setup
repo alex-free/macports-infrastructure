@@ -19,7 +19,7 @@ sudo rm -f /etc/cron.d/tigerports
 sudo rm -f /var/tmp/mprsyncup.lock
 
 # Install base deps to mimick mac os system.
-sudo apt install --yes git build-essential mtree-netbsd zlib1g-dev curl libcurl4-openssl-dev libnginx-mod-http-fancyindex
+sudo apt install --yes cron git build-essential mtree-netbsd zlib1g-dev curl libcurl4-openssl-dev libnginx-mod-http-fancyindex
 
 # Move to homedir.
 cd "$(eval echo ~${USER})"
@@ -139,6 +139,10 @@ sudo groupadd admin > /dev/null 2>&1
 # This runs every 15 minutes.
 echo "*/15 * * * * $USER flock -n /var/tmp/mprsyncup.lock '$mprsyncup_path' >> '$LOG_FILE' 2>&1" | sudo tee /etc/cron.d/tigerports > /dev/null
 
+
+sudo systemctl enable cron
+sudo systemctl stop cron
+sudo systemctl start cron
 # Enable rsync on startup and start serving now.
 sudo systemctl enable rsync
 sudo systemctl restart rsync
